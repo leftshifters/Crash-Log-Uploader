@@ -1,0 +1,19 @@
+1. Extract the source code into a folder and add all files to your project
+2. In the AppDelegate in applicationDidFinishLaunching, you need to add the following lines
+
+    [[BWQuincyManager sharedQuincyManager] setAppIdentifier:@"6463991af4a2da3f9cb320533c83b156"];
+    [[BWQuincyManager sharedQuincyManager] setDelegate:self];
+
+3. You need to implement this delegate - BWQuincyManagerDelegate
+4. Add these functions to implement the delegate in AppDelegate
+
+#pragma mark CrashReportSenderDelegate
+
+-(void)connectionOpened {
+	_application.networkActivityIndicatorVisible = YES;
+}
+
+-(void)connectionClosed {
+	_application.networkActivityIndicatorVisible = NO;
+}
+
