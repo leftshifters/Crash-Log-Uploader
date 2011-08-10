@@ -35,7 +35,8 @@
 
 - (IBAction) triggerCrash {
 	/* Trigger a crash */
-	CFRelease(NULL);
+	NSMutableArray *array = [[NSMutableArray alloc] init];
+    [array objectAtIndex:5];
 }
 
 

@@ -35,6 +35,8 @@
 #include <sys/sysctl.h>
 #include <inttypes.h> //needed for PRIx64 macro
 
+//#import "Global.h"
+
 NSBundle *quincyBundle(void) {
     static NSBundle* bundle = nil;
     if (!bundle) {
@@ -207,9 +209,17 @@ NSBundle *quincyBundle(void) {
 
 // begin the startup process
 - (void)startManager {
-    if (!_sendingInProgress && [self hasPendingCrashReport]) {
+    
+    
+#if TARGET_IPHONE_SIMULATOR
+    // DO NOTHING ON SIMULATOR
+#else
+    NSFileManager *fm = [NSFileManager defaultManager];
+
+    NSString* documentPath = [[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0] stringByAppendingPathComponent:@"log.txt"];
+    if (!_sendingInProgress && ([self hasPendingCrashReport] || [fm fileExistsAtPath:documentPath])) {
         _sendingInProgress = YES;
-        if (!self.autoSubmitCrashReport && [self hasNonApprovedCrashReports]) {
+        if ((!self.autoSubmitCrashReport && [self hasNonApprovedCrashReports]) || [fm fileExistsAtPath:documentPath]) {
             NSString *appName = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"];
             
             UIAlertView *alertView = [[UIAlertView alloc] initWithTitle:[NSString stringWithFormat:BWQuincyLocalize(@"CrashDataFoundTitle"), appName]
@@ -218,17 +228,21 @@ NSBundle *quincyBundle(void) {
                                                       cancelButtonTitle:BWQuincyLocalize(@"Don't Send")
                                                       otherButtonTitles:BWQuincyLocalize(@"Send Report"), nil];
             
-//            if ([self isShowingAlwaysButton]) {
-//                [alertView addButtonWithTitle:BWQuincyLocalize(@"Always")];
-//            }
+            //            if ([self isShowingAlwaysButton]) {
+            //                [alertView addButtonWithTitle:BWQuincyLocalize(@"Always")];
+            //            }
             
             [alertView setTag: QuincyKitAlertTypeSend];
             [alertView show];
             [alertView release];
+            
         } else {
             [self _sendCrashReports];
         }
     }
+
+#endif
+    
 }
 
 - (BOOL)hasNonApprovedCrashReports {
@@ -303,7 +317,7 @@ NSBundle *quincyBundle(void) {
 	if (qName) {
 		elementName = qName;
 	}
-	
+
 	if ([elementName isEqualToString:@"result"]) {
 		_contentOfProperty = [NSMutableString string];
     }
@@ -313,7 +327,7 @@ NSBundle *quincyBundle(void) {
 	if (qName) {
 		elementName = qName;
 	}
-	
+
     // open source implementation
 	if ([elementName isEqualToString: @"result"]) {
 		if ([_contentOfProperty intValue] > _serverResult) {
@@ -324,7 +338,6 @@ NSBundle *quincyBundle(void) {
 		}
 	}
 }
-
 
 - (void)parser:(NSXMLParser *)parser foundCharacters:(NSString *)string {
 	if (_contentOfProperty) {
@@ -339,18 +352,17 @@ NSBundle *quincyBundle(void) {
 #pragma mark -
 #pragma mark Private
 
-
 - (NSString *)_getOSVersionBuild {
     size_t size = 0;    
     NSString *osBuildVersion = nil;
-    
+
 	sysctlbyname("kern.osversion", NULL, &size, NULL, 0);
 	char *answer = (char*)malloc(size);
 	int result = sysctlbyname("kern.osversion", answer, &size, NULL, 0);
     if (result >= 0) {
         osBuildVersion = [NSString stringWithCString:answer encoding: NSUTF8StringEncoding];
     }
-    
+
     return osBuildVersion;   
 }
 
@@ -364,23 +376,22 @@ NSBundle *quincyBundle(void) {
 	return platform;
 }
 
-
 - (void)_performSendingCrashReports {
     NSMutableDictionary *approvedCrashReports = [NSMutableDictionary dictionaryWithDictionary:[[NSUserDefaults standardUserDefaults] dictionaryForKey: kApprovedCrashReports]];
 
     NSFileManager *fm = [NSFileManager defaultManager];
 	NSError *error = NULL;
-	
+
     NSMutableString *crashes = nil;
     _crashIdenticalCurrentVersion = NO;
-    
+
 	for (NSUInteger i=0; i < [_crashFiles count]; i++) {
 		NSString *filename = [_crashesDir stringByAppendingPathComponent:[_crashFiles objectAtIndex:i]];
 		NSData *crashData = [NSData dataWithContentsOfFile:filename];
 		
 		if ([crashData length] > 0) {
 			PLCrashReport *report = [[[PLCrashReport alloc] initWithData:crashData error:&error] autorelease];
-			
+
             if (report == nil) {
                 NSLog(@"Could not parse crash report");
 				[fm removeItemAtPath:filename error:&error];
@@ -388,15 +399,15 @@ NSBundle *quincyBundle(void) {
             }
 
 			NSString *crashLogString = [self _crashLogStringForReport:report];
-			
+
 			if ([report.applicationInfo.applicationVersion compare:[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"]] == NSOrderedSame) {
 				_crashIdenticalCurrentVersion = YES;
 			}
-			
+
             if (crashes == nil) {
                 crashes = [NSMutableString string];
             }
-            
+
 			[crashes appendFormat:@"<crash><applicationname>%s</applicationname><bundleidentifier>%@</bundleidentifier><systemversion>%@</systemversion><platform>%@</platform><senderversion>%@</senderversion><version>%@</version><userid>%@</userid><log><![CDATA[%@]]></log><appid>%@</appid></crash>",
              [[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleExecutable"] UTF8String],
              report.applicationInfo.applicationIdentifier,
@@ -407,7 +418,7 @@ NSBundle *quincyBundle(void) {
              [[UIDevice currentDevice] uniqueIdentifier],
              crashLogString,
              _appIdentifier];
-            
+
             // store this crash report as user approved, so if it fails it will retry automatically
             [approvedCrashReports setObject:[NSNumber numberWithBool:YES] forKey:[_crashFiles objectAtIndex:i]];
 		} else {
@@ -415,7 +426,7 @@ NSBundle *quincyBundle(void) {
             [fm removeItemAtPath:filename error:&error];
         }
 	}
-	
+
     [[NSUserDefaults standardUserDefaults] setObject:approvedCrashReports forKey:kApprovedCrashReports];
     [[NSUserDefaults standardUserDefaults] synchronize];
 
@@ -423,6 +434,9 @@ NSBundle *quincyBundle(void) {
         [self _postXML:[NSString stringWithFormat:@"<crashes>%@</crashes>", crashes]
                  toURL:[NSURL URLWithString:self.submissionURL]];
         
+    } else {
+        [self _postXML:[NSString stringWithFormat:@"<crashes></crashes>"]
+                 toURL:[NSURL URLWithString:self.submissionURL]];        
     }
 }
 
@@ -436,6 +450,9 @@ NSBundle *quincyBundle(void) {
     }
     [_crashFiles removeAllObjects];
     
+    NSString* documentPath = [[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0] stringByAppendingPathComponent:@"log.txt"];
+    [fm removeItemAtPath:documentPath error:nil];
+
     [[NSUserDefaults standardUserDefaults] setObject:nil forKey:kApprovedCrashReports];
     [[NSUserDefaults standardUserDefaults] synchronize];    
 }
@@ -689,9 +706,29 @@ NSBundle *quincyBundle(void) {
 - (void)_postXML:(NSString*)xml toURL:(NSURL*)url {
 	NSMutableURLRequest *request = nil;
 
-    request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"%@crash/post"]]];
+    request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"%@crash/post", url]]];
     
-    NSString *post = [NSString stringWithFormat:@"xml=%@", xml];
+    // URL ENCODE the XML
+    NSString *encodedXML = (NSString *)CFURLCreateStringByAddingPercentEscapes(NULL, (CFStringRef)xml, NULL, (CFStringRef)@"!*'();:@&=+$,/?%#[]", kCFStringEncodingUTF8);
+    NSString *post = [NSString stringWithFormat:@"xml=%@", encodedXML];
+
+    //Add log data 
+    NSError *fileReadError = nil;
+    
+    NSString* documentPath = [[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0] stringByAppendingPathComponent:@"log.txt"];
+    NSString *logFile = [NSString stringWithContentsOfFile:documentPath encoding:NSUTF8StringEncoding error:&fileReadError];
+    if (logFile.length > 0 && fileReadError == nil) {
+        post = [post stringByAppendingFormat:@"&log=%@&bundleID=%s&UDID=%@&systemVersion=%@&applicationVersion=%@&appName=%@",
+                logFile,
+                [[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleIdentifier"] UTF8String],
+                [[UIDevice currentDevice] uniqueIdentifier],
+                [[UIDevice currentDevice] systemVersion],
+                [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"],
+                [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"]
+                ];
+    }
+    
+    
     NSData *postData = [post dataUsingEncoding:NSASCIIStringEncoding allowLossyConversion:YES];
 
 		
@@ -704,19 +741,19 @@ NSBundle *quincyBundle(void) {
 	[request setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-type"];
 	
     [request setHTTPBody:postData];
-	
+
 	_serverResult = CrashReportStatusUnknown;
 	_statusCode = 200;
-	
+
 	//Release when done in the delegate method
 	_responseData = [[NSMutableData alloc] init];
-	
+
 	if (self.delegate != nil && [self.delegate respondsToSelector:@selector(connectionOpened)]) {
 		[self.delegate connectionOpened];
 	}
-	
+
 	_urlConnection = [[NSURLConnection alloc] initWithRequest:request delegate:self];
-    
+
     if (!_urlConnection) {
         _sendingInProgress = NO;
     }
@@ -738,11 +775,11 @@ NSBundle *quincyBundle(void) {
 	[_responseData release];
 	_responseData = nil;
 	[connection autorelease];
-	
+
 	if (self.delegate != nil && [self.delegate respondsToSelector:@selector(connectionClosed)]) {
 		[self.delegate connectionClosed];
 	}
-    
+
     _sendingInProgress = NO;
 }
 
@@ -751,6 +788,8 @@ NSBundle *quincyBundle(void) {
         [self _cleanCrashReports];
     }
 	
+//    NSLog(@"%@", [[NSString alloc] initWithData:_responseData encoding:NSUTF8StringEncoding]);
+    
 	[_responseData release];
 	_responseData = nil;
 	[connection autorelease];
