@@ -464,7 +464,7 @@ NSBundle *quincyBundle(void) {
 
 - (NSString *)_crashLogStringForReport:(PLCrashReport *)report {
 	NSMutableString *xmlString = [NSMutableString string];
-	
+    
 	/* Header */
     boolean_t lp64;
 	
@@ -508,7 +508,7 @@ NSBundle *quincyBundle(void) {
 	}
 	
 	[xmlString appendString:@"Incident Identifier: [TODO]\n"];
-	[xmlString appendString:@"CrashReporter Key:   [TODO]\n"];
+	[xmlString appendString:[NSString stringWithFormat:@"CrashReporter Key:   %@\n", [[UIDevice currentDevice] uniqueIdentifier]]];
     
     /* Application and process info */
     {
