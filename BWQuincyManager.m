@@ -788,7 +788,7 @@ NSBundle *quincyBundle(void) {
         [self _cleanCrashReports];
     }
 	
-//    NSLog(@"%@", [[NSString alloc] initWithData:_responseData encoding:NSUTF8StringEncoding]);
+    //NSLog(@"%@", [[NSString alloc] initWithData:_responseData encoding:NSUTF8StringEncoding]);
     
 	[_responseData release];
 	_responseData = nil;
